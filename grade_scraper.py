@@ -49,7 +49,7 @@ PAGE_TIMEOUT = 20000
 
 def read_user_info():
     """
-    從 user_info.txt 讀取帳號密碼。
+    從 credentials.txt 讀取帳號密碼。
 
     格式：
         username=...
@@ -619,7 +619,7 @@ def main():
 
         finally:
 
-            input("\n按 Enter 關閉瀏覽器...")
+            # input("\n按 Enter 關閉瀏覽器...")
 
             browser.close()
 
