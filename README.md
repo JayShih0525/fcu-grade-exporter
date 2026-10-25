@@ -7,7 +7,7 @@
 ### 1. 下載專案
 
 ```bash
-git clone <你的 GitHub Repository URL>
+git clone https://github.com/JayShih0525/fcu-grade-exporter.git
 cd fcu-grade-exporter
 ```
 
