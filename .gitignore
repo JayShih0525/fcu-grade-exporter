@@ -2,3 +2,4 @@ credentials.txt
 .venv/
 semester_html/
 fcu_grades.xlsx
+.DS_Store
