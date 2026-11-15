@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import subprocess
 import sys
 import time
@@ -10,7 +11,7 @@ READ_WEBSITE = BASE_DIR / "grade_scraper.py"
 HTML_TO_EXCEL = BASE_DIR / "excel_exporter.py"
 
 
-def run_script(script_path):
+def run_script(script_path, start, end):
     """
     使用目前虛擬環境的 Python 執行指定程式。
     """
@@ -30,6 +31,8 @@ def run_script(script_path):
     subprocess.run(
         [sys.executable, str(script_path)],
         cwd=BASE_DIR,
+        env={**os.environ, "FCU_PROGRESS_START": str(start),
+             "FCU_PROGRESS_END": str(end)},
         check=True
     )
 
@@ -51,16 +54,16 @@ def main():
     try:
 
         # STEP 1：登入 MyFCU，下載所有學期 HTML
-        run_script(READ_WEBSITE)
+        run_script(READ_WEBSITE, 0, 85)
 
         # STEP 2：合併所有學期成績到 Excel
-        run_script(HTML_TO_EXCEL)
+        run_script(HTML_TO_EXCEL, 85, 100)
 
         print("\n" + "=" * 60)
         print("所有工作執行完成！")
         print("=" * 60)
 
-        print(f"\nExcel：{BASE_DIR / '歷年學期成績.xlsx'}")
+        print(f"\nExcel：{BASE_DIR / 'fcu_grades.xlsx'}")
 
     except subprocess.CalledProcessError as e:
 
@@ -69,10 +72,15 @@ def main():
             f"\n結束代碼：{e.returncode}"
         )
 
+        return 1
+
     except Exception as e:
 
         print(f"\n發生錯誤：{e}")
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

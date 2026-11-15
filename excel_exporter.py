@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 import re
+from progress import report_progress
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -154,11 +155,10 @@ def format_excel(ws):
 
 def export_excel():
 
-    print("\n開始整理歷年學期成績...")
+    report_progress(0, "開始整理歷年學期成績")
 
     if not HTML_DIR.exists():
-        print(f"找不到資料夾：{HTML_DIR}")
-        return
+        raise FileNotFoundError(f"找不到資料夾：{HTML_DIR}")
 
     html_files = []
 
@@ -173,8 +173,7 @@ def export_excel():
     html_files.sort(key=lambda item: item[0])
 
     if not html_files:
-        print("找不到 semester_111_1.html 格式的檔案")
-        return
+        raise RuntimeError("找不到 semester_111_1.html 格式的檔案")
 
     wb = Workbook()
 
@@ -185,7 +184,7 @@ def export_excel():
 
     total_courses = 0
 
-    for (year, semester), filepath in html_files:
+    for index, ((year, semester), filepath) in enumerate(html_files, start=1):
 
         print(f"\n處理：{filepath.name}")
 
@@ -196,11 +195,16 @@ def export_excel():
         for row in rows:
             ws.append(row)
 
+        if not rows:
+            raise RuntimeError(f"{filepath.name} 沒有可匯出的課程資料")
         total_courses += len(rows)
+        report_progress(90 * index / len(html_files),
+                        f"已整理 {index}/{len(html_files)} 個學期")
 
     format_excel(ws)
 
     wb.save(OUTPUT_FILE)
+    report_progress(100, "Excel 匯出完成")
 
     print("\n" + "=" * 60)
     print("Excel 匯出完成")

@@ -3,3 +3,4 @@ credentials.txt
 semester_html/
 fcu_grades.xlsx
 .DS_Store
+__pycache__

@@ -1,5 +1,6 @@
 from pathlib import Path
-from urllib.parse import urlparse
+import sys
+from progress import report_progress
 from playwright.sync_api import sync_playwright
 import csv
 import re
@@ -87,10 +88,10 @@ def read_user_info():
 
     if not username or not password:
         raise ValueError(
-            "user_info.txt 必須包含 username 和 password"
+            "credentials.txt 必須包含 username 和 password"
         )
 
-    print("成功讀取 user_info.txt")
+    print("成功讀取 credentials.txt")
 
     return username, password
 
@@ -202,15 +203,10 @@ def login_myfcu(page, username, password):
 
         print("登入後已離開登入頁面")
 
-    except Exception:
-
-        print("\n登入後沒有偵測到頁面跳轉。")
-        print("這不一定代表登入失敗。")
-        print("請檢查瀏覽器是否已成功登入。")
-
-        input(
-            "\n確認登入成功後，按 Enter 繼續..."
-        )
+    except Exception as exc:
+        raise RuntimeError(
+            "自動登入未完成，請確認帳號密碼；若網站要求額外驗證，無法自動略過。"
+        ) from exc
 
     print("登入階段完成")
 
@@ -463,7 +459,7 @@ def process_semesters(page):
     print(f"找到 {total} 個查詢學期成績按鈕")
     print("=" * 60)
 
-    for index in range(total - 1, -1, -1):
+    for completed, index in enumerate(range(total - 1, -1, -1), start=1):
 
         button_number = index + 1
 
@@ -502,8 +498,22 @@ def process_semesters(page):
 
             print(f"進入：{detail_frame.url}")
 
-            # 等待資料載入
-            page.wait_for_timeout(2000)
+            # 等待 AngularJS 完成載入課程資料，避免儲存空白表格。
+            detail_frame.wait_for_function(
+                """() => {
+                    const rows = document.querySelectorAll(
+                        'tr[ng-repeat="item in slistCtrl.semesterScoreList.list"]'
+                    );
+                    return Array.from(rows).some(row => {
+                        const cells = row.querySelectorAll('td');
+                        return cells.length === 9 &&
+                            /^\\d+$/.test(cells[0].textContent.trim()) &&
+                            cells[3].textContent.trim() !== '' &&
+                            !row.textContent.includes('{{');
+                    });
+                }""",
+                timeout=PAGE_TIMEOUT,
+            )
 
             detail_frame = get_grade_frame(page)
 
@@ -537,6 +547,10 @@ def process_semesters(page):
                 print("無法返回列表，停止執行")
                 break
 
+        finally:
+            report_progress(20 + 75 * completed / total,
+                            f"已處理 {completed}/{total} 個學期")
+
     return results
 
 
@@ -546,14 +560,15 @@ def process_semesters(page):
 
 def main():
 
+    report_progress(0, "開始背景執行")
     # 讀取帳號密碼
     username, password = read_user_info()
 
     with sync_playwright() as p:
 
         browser = p.chromium.launch(
-            headless=False,
-            slow_mo=200
+            headless=True,
+            slow_mo=0
         )
 
         context = browser.new_context(
@@ -574,6 +589,8 @@ def main():
                 password
             )
 
+            report_progress(10, "登入完成")
+
             # STEP 2：進入成績查詢
             open_grade_page(page)
 
@@ -585,6 +602,8 @@ def main():
 
             print("\n成功找到成績查詢系統")
             print(frame.url)
+
+            report_progress(20, "已開啟學期列表")
 
             # STEP 4：讀取所有學期
             results = process_semesters(page)
@@ -613,16 +632,23 @@ def main():
                     f"{result['status']}"
                 )
 
+            if not results or success_count != len(results):
+                raise RuntimeError("部分學期下載失敗，已停止匯出，請查看 summary.csv。")
+            report_progress(100, "所有學期下載完成")
+
         except Exception as e:
 
-            print(f"\n程式執行失敗：{e}")
+            print(f"\n程式執行失敗：{e}", flush=True)
+            raise
 
         finally:
-
-            # input("\n按 Enter 關閉瀏覽器...")
 
             browser.close()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        print(f"錯誤：{exc}", file=sys.stderr, flush=True)
+        sys.exit(1)
